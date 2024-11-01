@@ -1,5 +1,9 @@
+from typing import List, Annotated
+from fastapi import APIRouter, WebSocket, Request, WebSocketDisconnect, Depends
 from typing import List
 from fastapi import APIRouter, WebSocket, Request, WebSocketDisconnect
+
+from app.services.openai_service import stream_openai
 from ..services.open_interpreter_service import stream_open_interpreter
 from ..services.websocket_service import send_websocket_message
 
@@ -44,10 +48,17 @@ manager = ConnectionManager()
 
 
 @router.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
+async def websocket_endpoint(
+    websocket: WebSocket,
+):
+    # 両方のアダプターをapp.stateから取得
+    mongo_adapter = websocket.app.state.mongo_adapter
+    openai_adapter = websocket.app.state.openai_adapter
+
     await manager.connect(websocket)
     try:
-        await stream_open_interpreter(websocket)
+        # 両方のアダプターを渡す
+        await stream_openai(websocket, mongo_adapter, openai_adapter)
     except WebSocketDisconnect:
         manager.disconnect(websocket)
 
@@ -55,7 +66,9 @@ async def websocket_endpoint(websocket: WebSocket):
 @router.post("/send_message")
 async def send_message(request: Request):
     message = await request.json()
-    await manager.send_message_to_all(message["message"], message.get("type", "message"))
+    await manager.send_message_to_all(
+        message["message"], message.get("type", "message")
+    )
     return {"status": "ok", "message": message["message"]}
 
 

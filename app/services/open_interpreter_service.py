@@ -6,25 +6,36 @@ from interpreter import interpreter
 from datetime import datetime
 from .websocket_service import send_websocket_message
 
+
 async def stream_open_interpreter(websocket):
-    language = os.getenv('LANGUAGE') or "japanese"
+    language = os.getenv("LANGUAGE") or "japanese"
 
     try:
         # 1日の記憶を保持する
         interpreter.conversation_filename = f"{datetime.now().strftime('%Y%m%d')}.json"
         interpreter.conversation_history_path = "./conversation_histories/"
-        if os.path.exists(interpreter.conversation_history_path + interpreter.conversation_filename):
+        if os.path.exists(
+            interpreter.conversation_history_path + interpreter.conversation_filename
+        ):
             # あったら読み込んで記憶として設定する
-            with open(interpreter.conversation_history_path + interpreter.conversation_filename, "r") as f:
+            with open(
+                interpreter.conversation_history_path
+                + interpreter.conversation_filename,
+                "r",
+            ) as f:
                 interpreter.messages = json.load(f)
             print("Loaded conversation history.")
         else:
             # なかったら作成する
-            with open(interpreter.conversation_history_path + interpreter.conversation_filename, "w") as f:
+            with open(
+                interpreter.conversation_history_path
+                + interpreter.conversation_filename,
+                "w",
+            ) as f:
                 json.dump([], f)
             print("Created conversation history.")
 
-        interpreter.llm.model = "gpt-4o"
+        interpreter.llm.model = "gpt-4o-mini"
         interpreter.auto_run = True
         # interpreter.debug_mode = True
         interpreter.system_message = f"""
@@ -88,19 +99,41 @@ Your workspace is `./workspace` folder. If you make an output file, please put i
                     # OpenInterpreterの結果をstreamモードで取得、chunk毎に処理
                     is_source_code = False
                     try:
-                        for chunk in interpreter.chat(message_content, display=True, stream=True):
+                        for chunk in interpreter.chat(
+                            message_content, display=True, stream=True
+                        ):
                             current_type = chunk["type"]
-                            exculde_types = ["language", "active_line", "end_of_execution", "start_of_message", "end_of_message", "start_of_code", "end_of_code"]
+                            exculde_types = [
+                                "language",
+                                "active_line",
+                                "end_of_execution",
+                                "start_of_message",
+                                "end_of_message",
+                                "start_of_code",
+                                "end_of_code",
+                            ]
                             if current_type not in exculde_types:
                                 # message typeの場合は、文節に区切ってメッセージを送信
-                                if message and (current_type != prev_type or (len(message) > 15 and message[-1] in ['、', '。', '！', '？', '；', '…', '：'] or message[-1] == "\n")):
+                                if message and (
+                                    current_type != prev_type
+                                    or (
+                                        len(message) > 15
+                                        and message[-1]
+                                        in ["、", "。", "！", "？", "；", "…", "："]
+                                        or message[-1] == "\n"
+                                    )
+                                ):
                                     if message != "":
                                         if "```" in message:
                                             # Toggle is_source_code
                                             is_source_code = not is_source_code
                                         else:
-                                            type_ = "code" if is_source_code else prev_type
-                                            await send_websocket_message(websocket, message, type_)
+                                            type_ = (
+                                                "code" if is_source_code else prev_type
+                                            )
+                                            await send_websocket_message(
+                                                websocket, message, type_
+                                            )
                                     message = ""
 
                                 if current_type == "executing":
@@ -108,7 +141,11 @@ Your workspace is `./workspace` folder. If you make an output file, please put i
                                 else:
                                     try:
                                         if isinstance(chunk["content"], dict):
-                                            await send_websocket_message(websocket, chunk["content"]["content"], type_)
+                                            await send_websocket_message(
+                                                websocket,
+                                                chunk["content"]["content"],
+                                                type_,
+                                            )
                                         elif isinstance(chunk["content"], str):
                                             message += chunk["content"]
                                         else:
@@ -146,8 +183,14 @@ Your workspace is `./workspace` folder. If you make an output file, please put i
                     await send_websocket_message(websocket, "", "assistant", "start")
 
                     # メッセージを追加
-                    saved_file = f"{directory}/{file_name}にファイルを保存しました。" if language == 'japanese' else f"Saved file to {directory}/{file_name}."
-                    save_message = "ファイルを保存しました。" if language == 'japanese' else f"Saved file."
+                    saved_file = (
+                        f"{directory}/{file_name}にファイルを保存しました。"
+                        if language == "japanese"
+                        else f"Saved file to {directory}/{file_name}."
+                    )
+                    save_message = (
+                        "ファイルを保存しました。" if language == "japanese" else f"Saved file."
+                    )
                     await send_websocket_message(websocket, save_message, "assistant")
 
                     # 処理終了時に"end"を送信
@@ -158,7 +201,11 @@ Your workspace is `./workspace` folder. If you make an output file, please put i
                     # 処理開始時に"start"を送信
                     await send_websocket_message(websocket, "", "assistant", "start")
 
-                    error_message = "不正な送信が送られたようです。" if language == 'japanese' else "An invalid message was sent."
+                    error_message = (
+                        "不正な送信が送られたようです。"
+                        if language == "japanese"
+                        else "An invalid message was sent."
+                    )
                     await send_websocket_message(websocket, error_message, "assistant")
 
                     # 処理終了時に"end"を送信
