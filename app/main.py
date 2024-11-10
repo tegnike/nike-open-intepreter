@@ -11,7 +11,8 @@ if os.getenv("DEBUG_MODE") == "1":
     ptvsd.wait_for_attach()
 
 # アダプターのグローバルインスタンスを作成
-mongo_adapter = MongoAdapter("default_game", "default_save", "default_target")
+save_name = "save6"
+mongo_adapter = MongoAdapter("nike_test", save_name, "「とにかくバトルがしたい！」モードで1勝する")
 openai_adapter = OpenAIAdapter()
 
 app = FastAPI()

@@ -97,15 +97,17 @@ class MongoAdapter:
             return None
 
         # 指定件数分のログを取得
-        logs = doc["logs"][-self.log_limit :]
+        logs = doc["logs"]
         log_list = []
         for log in logs:
-            # JSONにダンプ
-            text_log = json.dumps(
-                log, ensure_ascii=False, indent=2, cls=DateTimeEncoder
-            )
-            log_list.append(text_log)
-        return "\n".join(log_list)
+            # プレイログ更新のみをフィルタリング
+            if log.get("event", {}).get("type") == "プレイログ更新":
+                # JSONにダンプ
+                text_log = json.dumps(
+                    log, ensure_ascii=False, indent=2, cls=DateTimeEncoder
+                )
+                log_list.append(text_log)
+        return log_list
 
 
 # エンコーダ

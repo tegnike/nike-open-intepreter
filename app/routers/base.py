@@ -58,13 +58,14 @@ async def websocket_endpoint(
     await manager.connect(websocket)
     try:
         # 両方のアダプターを渡す
-        await stream_openai(websocket, mongo_adapter, openai_adapter)
+        await stream_openai(websocket, openai_adapter, mongo_adapter)
     except WebSocketDisconnect:
         manager.disconnect(websocket)
 
 
 @router.post("/send_message")
 async def send_message(request: Request):
+    # curl -X POST http://localhost:8000/send_message -H "Content-Type: application/json" -d '{"message": "こんにちは、世界！", "type": "assistant"}'
     message = await request.json()
     await manager.send_message_to_all(
         message["message"], message.get("type", "message")
