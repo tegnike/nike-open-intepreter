@@ -15,11 +15,18 @@ class ConnectionManager:
         self.active_connections: List[WebSocket] = []
 
     async def connect(self, websocket: WebSocket):
-        await websocket.accept()
-        self.active_connections.append(websocket)
+        try:
+            await websocket.accept()
+            self.active_connections.append(websocket)
+        except Exception as e:
+            print(f"Error connecting WebSocket: {e}")
 
     def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
+        try:
+            if websocket in self.active_connections:
+                self.active_connections.remove(websocket)
+        except Exception as e:
+            print(f"Error disconnecting WebSocket: {e}")
 
     async def send_personal_message(self, message: str, websocket: WebSocket):
         await websocket.send_text(message)
@@ -29,14 +36,19 @@ class ConnectionManager:
             await connection.send_text(message)
 
     async def send_message_to_all(self, message: str, type: str):
+        from ..services.websocket_service import is_websocket_connected
+
         closed_connections = []
         for websocket in self.active_connections:
+            if not await is_websocket_connected(websocket):
+                closed_connections.append(websocket)
+                continue
+
             try:
                 await send_websocket_message(websocket, "", "assistant", "start")
                 await send_websocket_message(websocket, message, type)
                 await send_websocket_message(websocket, "", "assistant", "end")
-            except RuntimeError:
-                # WebSocketが閉じられている場合、後で削除するためにリストに追加
+            except Exception:
                 closed_connections.append(websocket)
 
         # 閉じられたコネクションを削除

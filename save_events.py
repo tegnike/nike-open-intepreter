@@ -4,7 +4,7 @@ from app.adapters.mongo_adapter import MongoAdapter
 
 # 定数定義
 GAME_TITLE = "nike_test"
-SAVE_NAME = "save6"
+SAVE_NAME = "save12"
 PLAY_TARGET = "「とにかくバトルがしたい！」モードで1勝する"
 
 
@@ -34,7 +34,7 @@ def main():
             print(f"Saved event: {reasoning[:50]}...")  # 最初の50文字のみ表示
 
             # 次のイベントまで15秒待機
-            time.sleep(15)
+            time.sleep(22)
 
         print("All events have been saved successfully!")
 

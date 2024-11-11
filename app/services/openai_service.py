@@ -3,6 +3,8 @@ from ..adapters.mongo_adapter import MongoAdapter
 from ..adapters.openai_adapter import OpenAIAdapter
 import asyncio
 import json
+from fastapi import WebSocketDisconnect
+from ..services.websocket_service import is_websocket_connected
 
 
 async def stream_openai(
@@ -12,11 +14,12 @@ async def stream_openai(
 ):
     while True:
         try:
-            if websocket.closed:
-                break
-
             # 1秒待機
             await asyncio.sleep(1)
+
+            if not await is_websocket_connected(websocket):
+                print("WebSocket connection lost")
+                break
 
             # ログを取得
             print("fetch_logs")
@@ -41,5 +44,20 @@ async def stream_openai(
                 # OpenAIにストリーミング送信し、完了を待つ
                 await openai_adapter.chat(websocket, latest_log)
 
+            # WebSocketメッセージの確認とログの処理を並行して実行
+            try:
+                message = await asyncio.wait_for(
+                    websocket.receive_text(), timeout=0.1  # 100ミリ秒のタイムアウト
+                )
+                # メッセージを受信した場合の処理をここに書く
+                print(f"Received message: {message}")
+                await openai_adapter.stream_chat(websocket, message)
+            except TimeoutError:
+                # タイムアウトは正常なケース - ログの処理を継続
+                pass
+
+        except WebSocketDisconnect:
+            print("WebSocket disconnected")
+            break
         except Exception as e:
             print("stream_openai error:", e)
