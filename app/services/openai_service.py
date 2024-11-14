@@ -42,7 +42,7 @@ async def stream_openai(
                     latest_log = json.loads(latest_log)
 
                 # OpenAIにストリーミング送信し、完了を待つ
-                await openai_adapter.chat(websocket, latest_log)
+                await openai_adapter.base_chat(websocket, latest_log)
 
             # WebSocketメッセージの確認とログの処理を並行して実行
             try:
@@ -51,7 +51,7 @@ async def stream_openai(
                 )
                 # メッセージを受信した場合の処理をここに書く
                 print(f"Received message: {message}")
-                await openai_adapter.stream_chat(websocket, message)
+                await openai_adapter.stream_chat(websocket, mongo_adapter, message)
             except TimeoutError:
                 # タイムアウトは正常なケース - ログの処理を継続
                 pass

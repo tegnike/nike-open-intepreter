@@ -1,8 +1,11 @@
 import json
 import datetime
 import random
+import asyncio
 from openai import OpenAI
 from fastapi import WebSocket
+
+from app.adapters.mongo_adapter import MongoAdapter
 from ..services.websocket_service import send_websocket_message
 
 
@@ -22,7 +25,7 @@ class OpenAIAdapter:
 
         self.system_prompt = """
 あなたの名前はニケ、女子高生AIです。
-これからあなたにはYoutube配信をしながらポケモンスタジアム2をプレイしてもらいます。
+あなたは今、Youtube配信をしながらポケモンスタジアム2をプレイしています。
 今からポケモンスタジアム2でのプレイログが渡されるので、最後に実行された処理をさもあなたが選択したかのように発言してください。
 
 ゲームに関する留意点
@@ -115,7 +118,9 @@ Here is the output schema:
 ```
 """
 
-    async def stream_chat(self, websocket: WebSocket, user_message: str):
+    async def stream_chat(
+        self, websocket: WebSocket, mongo_adapter: MongoAdapter, user_message: str
+    ):
         await send_websocket_message(websocket, "", "assistant", "start")
         await send_websocket_message(websocket, "", "assistant", "start")
 
@@ -171,12 +176,97 @@ Here is the output schema:
 
             self.conversation_history.append(f"human: {user_message}")
             self.conversation_history.append(f"ai: {ai_message}")
+
+            # add_logの呼び出しを非同期タスクとして作成
+            asyncio.create_task(
+                self.add_log(mongo_adapter, "\n".join(self.conversation_history[-10:]))
+            )
+
         except Exception as e:
             print("stream_chat error", e)
         finally:
             await send_websocket_message(websocket, "", "assistant", "end")
 
-    async def chat(self, websocket: WebSocket, log: dict):
+    async def add_log(self, mongo_adapter: MongoAdapter):
+        try:
+            conversation_history = "\n".join(self.conversation_history[-3:])
+            system_prompt = f"""
+あなたはAIの意思決定を判断するボットです。
+下記の会話歴は、ゲームをしているAIとユーザーの会話です。
+会話歴と現在の画面の状況から、ゲームの方向性に対してユーザーがアドバイスをし、それをAI受け入れたかどうかを判断してください。
+判定が正の場合はどのようなアドバイスを受け入れたのかも返却してください。
+
+会話歴
+```
+{conversation_history}
+```
+
+現在の画面の状況
+```
+{self.previous_situation}
+```
+
+出力形式（JSON）
+```
+{
+  "judge": boolean,
+  "advise": string,
+}
+```
+
+例1
+```
+human: けっこうガンガン技撃つだけで勝てるから、ポケモンは交代しない方がいいよ。
+ai: 確かにそうだね。ありがとうございます。
+
+answer: {
+  "judge": true,
+  "advise": "不利対面でもポケモンを交代しない"
+}
+```
+
+例2
+```
+human: ポケモン面白そうだね。
+ai: はい！面白いですよ！
+
+answer: {
+  "judge": false,
+  "advise": ""
+}
+```
+"""
+
+            response = self.client.chat.completions.create(
+                model="gpt-4o",
+                temperature=0.7,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": "渡した状況から判断してください。"},
+                ],
+                response_format={"type": "json_object"},
+            )
+
+            ai_message = response.choices[0].message.content
+            print("ai_message", ai_message)
+
+            # コードブロックを処理する
+            if ai_message.startswith("```") and ai_message.endswith("```"):
+                # コードブロックの開始と終了を削除
+                ai_message = ai_message.strip("`")
+                # 言語指定部分（例：json）を削除
+                if ai_message.startswith("json"):
+                    ai_message = ai_message[4:]  # 'json'を削除
+                ai_message = ai_message.strip()  # 余分な空白を削除
+
+            response = json.loads(ai_message)
+            if response["judge"]:
+                mongo_adapter.update_log2(response["advise"])
+        except Exception as e:
+            print("chat error", e)
+            raise e
+
+    async def base_chat(self, websocket: WebSocket, log: dict):
         await send_websocket_message(websocket, "", "assistant", "start")
 
         try:
@@ -195,6 +285,7 @@ Here is the output schema:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_message},
                 ],
+                response_format={"type": "json_object"},
             )
 
             ai_message = response.choices[0].message.content

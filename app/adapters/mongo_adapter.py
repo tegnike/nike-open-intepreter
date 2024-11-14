@@ -88,6 +88,28 @@ class MongoAdapter:
 
         return json.dumps(log_entry, ensure_ascii=False, indent=2, cls=DateTimeEncoder)
 
+    def update_log2(self, advise):
+        if not self.current_doc:
+            return
+
+        log_entry = {
+            "timestamp": datetime.datetime.now(datetime.timezone.utc),
+            "event": {
+                "type": "アドバイス",
+                "advise": advise,
+            },
+        }
+
+        self.collection.update_one(
+            {"save_name": self.save_name},
+            {
+                "$push": {"logs": log_entry},
+                "$set": {"updated_at": datetime.datetime.now(datetime.timezone.utc)},
+            },
+        )
+
+        return json.dumps(log_entry, ensure_ascii=False, indent=2, cls=DateTimeEncoder)
+
     def fetch_logs(self):
         if not self.current_doc:
             return None
